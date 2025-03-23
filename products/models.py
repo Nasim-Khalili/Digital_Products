@@ -3,7 +3,7 @@ from django.db import models
 class Category(models.Model):
     parent = models.ForeignKey('self',verbose_name='parent',blank=True,null=True,on_delete=models.CASCADE)
     title = models.CharField(verbose_name='Name',max_length=50)
-    descriotion = models.TimeField(verbose_name='descriotion',blank=True)
+    description = models.TimeField(verbose_name='description',blank=True,null=True)
     avatar = models.ImageField(blank=True,upload_to='categories')
     is_enable = models.BooleanField(default=True)
     created_time = models.DateTimeField(auto_now_add=True)
@@ -14,9 +14,13 @@ class Meta:
     verbose_name = 'Category'
     verbose_name_plural = 'Categories'
 
+
+    def __str__(self):
+        return self.title if self.title else "No Title"
+
 class Product(models.Model):
     title = models.CharField(verbose_name='Name',max_length=50)
-    descriotion = models.TimeField(verbose_name='descriotion',blank=True)
+    description = models.TimeField(verbose_name='description',null=True, blank=True)
     avatar = models.ImageField(blank=True,upload_to='produvts')
     is_enable = models.BooleanField(default=True)
     categories = models.ManyToManyField('Category',verbose_name='categories',blank=True)
@@ -27,7 +31,6 @@ class Meta:
     db_table = 'products'
     verbose_name = 'Product'
     verbose_name_plural = 'products'
-
 
 
 class File(models.Model):
