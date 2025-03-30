@@ -1,7 +1,6 @@
 import random
-
 from django.db import models
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.core import validators
 from django.utils import timezone
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager, send_mail
@@ -19,10 +18,10 @@ class UserManager(BaseUserManager):
             raise ValueError('The given username must be set')
         email = self.normalize_email(email)
         user = self.model(phone_number=phone_number,
-                          username=username, email=email,
-                          is_staff=is_staff, is_active=True,
-                          is_superuser=is_superuser,
-                          date_joined=now, **extra_fields)
+                        username=username, email=email,
+                        is_staff=is_staff, is_active=True,
+                        is_superuser=is_superuser,
+                        date_joined=now, **extra_fields)
 
         if not extra_fields.get('no_password'):
             user.set_password(password)
@@ -50,43 +49,81 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     """
-    An abstract base class implementing a fully featured User model with
-    admin-compliant permissions.
-
-    Username, password and email are required. Other fields are optional.
+    Custom User model with email and phone number as login options.
     """
-    username = models.CharField(_('username'), max_length=32, unique=True,
-                                help_text=_(
-                                    'Required. 30 characters or fewer starting with a letter. Letters, digits and underscore only.'),
-                                validators=[
-                                    validators.RegexValidator(r'^[a-zA-Z][a-zA-Z0-9_\.]+$',
-                                                              _('Enter a valid username starting with a-z. '
-                                                                'This value may contain only letters, numbers '
-                                                                'and underscore characters.'), 'invalid'),
-                                ],
-                                error_messages={
-                                    'unique': _("A user with that username already exists."),
-                                }
-                                )
+    username = models.CharField(
+        _('username'),
+        max_length=32,
+        unique=True,
+        help_text=_('Required. 30 characters or fewer starting with a letter. Letters, digits and underscore only.'),
+        validators=[
+            validators.RegexValidator(
+                r'^[a-zA-Z][a-zA-Z0-9_\.]+$',
+                _('Enter a valid username starting with a-z. This value may contain only letters, numbers and underscore characters.'),
+                'invalid'
+            ),
+        ],
+        error_messages={
+            'unique': _("A user with that username already exists."),
+        }
+    )
     first_name = models.CharField(_('first name'), max_length=30, blank=True)
     last_name = models.CharField(_('last name'), max_length=30, blank=True)
-    email = models.EmailField(_('email address'), unique=True, null=True, blank=True)
-    phone_number = models.BigIntegerField(_('mobile number'), unique=True, null=True, blank=True,
-                                          validators=[
-                                              validators.RegexValidator(r'^989[0-3,9]\d{8}$',
-                                                                        ('Enter a valid mobile number.'), 'invalid'),
-                                          ],
-                                          error_messages={
-                                              'unique': _("A user with this mobile number already exists."),
-                                          }
-                                          )
-    is_staff = models.BooleanField(_('staff status'), default=False,
-                                   help_text=_('Designates whether the user can log into this admin site.'))
-    is_active = models.BooleanField(_('active'), default=True,
-                                    help_text=_('Designates whether this user should be treated as active. '
-                                                'Unselect this instead of deleting accounts.'))
+    email = models.EmailField(
+        _('email address'),
+        unique=True,
+        null=True,
+        blank=True,
+        error_messages={
+            'unique': _("A user with that email already exists."),
+        }
+    )
+    phone_number = models.BigIntegerField(
+        _('mobile number'),
+        unique=True,
+        null=True,
+        blank=True,
+        validators=[
+            validators.RegexValidator(
+                r'^989[0-3,9]\d{8}$',
+                _('Enter a valid mobile number.'),
+                'invalid'
+            ),
+        ],
+        error_messages={
+            'unique': _("A user with this mobile number already exists."),
+        }
+    )
+    is_staff = models.BooleanField(
+        _('staff status'),
+        default=False,
+        help_text=_('Designates whether the user can log into this admin site.')
+    )
+    is_active = models.BooleanField(
+        _('active'),
+        default=True,
+        help_text=_('Designates whether this user should be treated as active. Unselect this instead of deleting accounts.')
+    )
     date_joined = models.DateTimeField(_('date joined'), default=timezone.now)
-    last_seen = models.DateTimeField(_('last seen date'), null=True)
+    last_seen = models.DateTimeField(_('last seen date'), null=True, blank=True)
+
+    # Custom related names to avoid clashes
+    groups = models.ManyToManyField(
+        'auth.Group',
+        verbose_name=_('groups'),
+        blank=True,
+        help_text=_('The groups this user belongs to.'),
+        related_name='custom_user_set',
+        related_query_name='user',
+    )
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+        verbose_name=_('user permissions'),
+        blank=True,
+        help_text=_('Specific permissions for this user.'),
+        related_name='custom_user_set',
+        related_query_name='user',
+    )
 
     objects = UserManager()
 
@@ -99,51 +136,52 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = _('users')
 
     def get_full_name(self):
-        """
-        Returns the first_name plus the last_name, with a space in between.
-        """
-        full_name = '%s %s' % (self.first_name, self.last_name)
+        """Return the first_name plus the last_name, with a space in between."""
+        full_name = f'{self.first_name} {self.last_name}'
         return full_name.strip()
 
     def get_short_name(self):
-        """
-        Returns the short name for the user.
-        """
+        """Return the short name for the user."""
         return self.first_name
 
     def email_user(self, subject, message, from_email=None, **kwargs):
-        """
-        Sends an email to this User.
-        """
+        """Send an email to this User."""
         send_mail(subject, message, from_email, [self.email], **kwargs)
 
     @property
     def is_loggedin_user(self):
-        """
-        Returns True if user has actually logged in with valid credentials.
-        """
+        """Return True if user has actually logged in with valid credentials."""
         return self.phone_number is not None or self.email is not None
 
     def save(self, *args, **kwargs):
+        """Clean email before saving."""
         if self.email is not None and self.email.strip() == '':
             self.email = None
         super().save(*args, **kwargs)
 
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    nick_name = models.CharField(_('nick_name'), max_length=150, blank=True)
-    avatar = models.ImageField(_('avatar'), blank=True)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+    nick_name = models.CharField(_('nick name'), max_length=150, blank=True)
+    avatar = models.ImageField(_('avatar'), upload_to='avatars/', blank=True)
     birthday = models.DateField(_('birthday'), null=True, blank=True)
-    gender = models.NullBooleanField(_('gender'), help_text=_('female is False, male is True, null is unset'))
-    province = models.ForeignKey(verbose_name=_('province'), to='Province', null=True, on_delete=models.SET_NULL)
-    # email = models.EmailField(_('email address'), blank=True)
-    # phone_number = models.BigIntegerField(_('mobile number'), null=True, blank=True,
-    #                                       validators=[
-    #                                           validators.RegexValidator(r'^989[0-3,9]\d{8}$',
-    #                                                                     _('Enter a valid mobile number.'), 'invalid'),
-    #                                       ],
-    #                                       )
+    gender = models.BooleanField(
+        _('gender'),
+        null=True,
+        blank=True,
+        help_text=_('female is False, male is True, null is unset')
+    )
+    province = models.ForeignKey(
+        'Province',
+        verbose_name=_('province'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
 
     class Meta:
         db_table = 'user_profiles'
@@ -172,18 +210,40 @@ class Device(models.Model):
         (ANDROID, 'android'),
     )
 
-    user = models.ForeignKey(User, related_name='devices', on_delete=models.CASCADE)
-    device_uuid = models.UUIDField(_('Device UUID'), null=True)
-    # notify_token = models.CharField(
-    #     _('Notification Token'), max_length=200, blank=True,
-    #     validators=[validators.RegexValidator(r'([a-z]|[A-z]|[0-9])\w+',
-    #                                           _('Notify token is not valid'), 'invalid')]
-    # )
-    last_login = models.DateTimeField(_('last login date'), null=True)
-    device_type = models.PositiveSmallIntegerField(choices=DEVICE_TYPE_CHOICES, default=WEB)
-    device_os = models.CharField(_('device os'), max_length=20, blank=True)
-    device_model = models.CharField(_('device model'), max_length=50, blank=True)
-    app_version = models.CharField(_('app version'), max_length=20, blank=True)
+    user = models.ForeignKey(
+        User,
+        related_name='devices',
+        on_delete=models.CASCADE
+    )
+    device_uuid = models.UUIDField(
+        _('Device UUID'),
+        null=True,
+        blank=True
+    )
+    last_login = models.DateTimeField(
+        _('last login date'),
+        null=True,
+        blank=True
+    )
+    device_type = models.PositiveSmallIntegerField(
+        choices=DEVICE_TYPE_CHOICES,
+        default=WEB
+    )
+    device_os = models.CharField(
+        _('device os'),
+        max_length=20,
+        blank=True
+    )
+    device_model = models.CharField(
+        _('device model'),
+        max_length=50,
+        blank=True
+    )
+    app_version = models.CharField(
+        _('app version'),
+        max_length=20,
+        blank=True
+    )
     created_time = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -198,6 +258,10 @@ class Province(models.Model):
     is_valid = models.BooleanField(default=True)
     modified_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('province')
+        verbose_name_plural = _('provinces')
 
     def __str__(self):
         return self.name
